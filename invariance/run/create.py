@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from invariance import __version__
@@ -20,7 +20,7 @@ def create_run_directory(
 
     # Metadata
     metadata = {
-        "created_at": datetime.now(tz=timezone.utc).isoformat(),
+        "created_at": datetime.now(tz=UTC).isoformat(),
         "invariance_version": __version__,
     }
 

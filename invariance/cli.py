@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-from invariance.config.load import load_simulation_config
-from invariance.run.create import create_run_directory
+from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 from rich import print
 
-from pydantic import ValidationError
-
 from invariance import __version__
+from invariance.config.load import load_simulation_config
+from invariance.run.create import create_run_directory
 
 app = typer.Typer(
     name="invariance",
@@ -37,22 +36,26 @@ def version() -> None:
     
 @app.command()
 def simulate(
-    config: Path = typer.Option(
-        ...,
-        "--config",
-        "-c",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        help="Path to simulation config JSON file",
-    ),
-    out: Path = typer.Option(
-        ...,
-        "--out",
-        "-o",
-        help="Output directory for run artifacts",
-    ),
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            "-c",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Path to simulation config JSON file",
+        ),
+    ],
+    out: Annotated[
+        Path,
+        typer.Option(
+            "--out",
+            "-o",
+            help="Output directory for run artifacts",
+        ),
+    ],
 ) -> None:
     """
     Validate a simulation config and create a run directory.
@@ -63,13 +66,13 @@ def simulate(
     except ValidationError as e:
         typer.echo("Error: Validation failed for simulation config", err=True)
         typer.echo(e, err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     try:
         create_run_directory(out, sim_config)
-    except FileExistsError:
+    except FileExistsError as e:
         typer.echo(f"Error: Output directory already exists: {out}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     typer.echo(f"✔ Loaded simulation config from {config}")
     typer.echo(f"✔ Created run directory: {out}")
