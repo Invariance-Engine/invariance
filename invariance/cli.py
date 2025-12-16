@@ -10,6 +10,7 @@ app = typer.Typer(
     help="Invariance: auto-calibrated physics (starting with thermal diffusion).",
 )
 
+
 @app.callback(invoke_without_command=True)
 def main_callback(ctx: typer.Context) -> None:
     """
@@ -19,12 +20,14 @@ def main_callback(ctx: typer.Context) -> None:
         # If no subcommand is provided, show help.
         print(ctx.get_help())
 
+
 @app.command()
 def version() -> None:
     """
     Print the installed Invariance version.
     """
     print(f"[bold]invariance[/bold] v{__version__}")
+
 
 def main() -> None:
     app()
