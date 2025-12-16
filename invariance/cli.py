@@ -15,6 +15,12 @@ from invariance.physics.heat2d import compute_stability_dt, simulate_heat_2d
 import json
 import numpy as np
 
+from invariance.data.sensors import load_sensor_data, map_sensors_to_grid
+from invariance.analysis.residuals import (
+    sample_simulation_at_sensors,
+    compute_error_metrics,
+)
+
 app = typer.Typer(
     name="invariance",
     help="Invariance: auto-calibrated physics (starting with thermal diffusion).",
@@ -39,49 +45,6 @@ def version() -> None:
     print(f"[bold]invariance[/bold] v{__version__}")
 
 
-# @app.command()
-# def simulate(
-#     config: Annotated[
-#         Path,
-#         typer.Option(
-#             "--config",
-#             "-c",
-#             exists=True,
-#             file_okay=True,
-#             dir_okay=False,
-#             readable=True,
-#             help="Path to simulation config JSON file",
-#         ),
-#     ],
-#     out: Annotated[
-#         Path,
-#         typer.Option(
-#             "--out",
-#             "-o",
-#             help="Output directory for run artifacts",
-#         ),
-#     ],
-# ) -> None:
-#     """
-#     Validate a simulation config and create a run directory.
-#     (Physics comes in the next milestone.)
-#     """
-#     try:
-#         sim_config = load_simulation_config(config)
-#     except ValidationError as e:
-#         typer.echo("Error: Validation failed for simulation config", err=True)
-#         typer.echo(e, err=True)
-#         raise typer.Exit(code=1) from e
-
-#     try:
-#         create_run_directory(out, sim_config)
-#     except FileExistsError as e:
-#         typer.echo(f"Error: Output directory already exists: {out}", err=True)
-#         raise typer.Exit(code=1) from e
-
-
-#     typer.echo(f"✔ Loaded simulation config from {config}")
-#     typer.echo(f"✔ Created run directory: {out}")
 @app.command()
 def simulate(
     config: Annotated[
@@ -174,6 +137,70 @@ def simulate(
 
     # 6. Done
     typer.echo("✔ Heat simulation completed")
+    
+    
+@app.command()
+def validate(
+    run: Annotated[
+        Path,
+        typer.Option(
+            "--run",
+            "-r",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            help="Run directory produced by `simulate`",
+        ),
+    ],
+    sensors: Annotated[
+        Path,
+        typer.Option(
+            "--sensors",
+            "-s",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            help="Sensor CSV file",
+        ),
+    ],
+) -> None:
+    """
+    Validate a simulation run against sensor data.
+    """
+    # Load artifacts
+    T = np.load(run / "history.npy")
+
+    with (run / "config.json").open() as f:
+        config = json.load(f)
+
+    dt = config["time"]["dt"]
+    dx = config["grid"]["dx"]
+    dy = config["grid"]["dy"]
+    nx = config["grid"]["nx"]
+    ny = config["grid"]["ny"]
+
+    # Load + map sensors
+    sensors_df = load_sensor_data(sensors)
+    sensors_df = map_sensors_to_grid(sensors_df, dx, dy, nx, ny)
+
+    # Sample simulation
+    residual_df = sample_simulation_at_sensors(T, sensors_df, dt)
+
+    # Metrics
+    metrics = compute_error_metrics(residual_df)
+
+    # Write results
+    residual_df.to_csv(run / "sensor_residuals.csv", index=False)
+
+    with (run / "metrics.json").open("r+") as f:
+        run_metrics = json.load(f)
+        run_metrics["sensor_validation"] = metrics
+        f.seek(0)
+        json.dump(run_metrics, f, indent=2)
+        f.truncate()
+
+    typer.echo("✔ Sensor validation completed")
+    typer.echo(f"RMSE = {metrics['rmse']:.3f}")
 
 
 def main() -> None:
