@@ -26,6 +26,13 @@ from invariance.data.sensors import load_sensor_data, map_sensors_to_grid
 
 from invariance.synthetic.generate import generate_synthetic_case
 
+from invariance.cli_utils.messages import info, error
+
+from invariance.run.create import write_manifest
+
+from invariance.runtime import set_deterministic
+
+
 app = typer.Typer(
     name="invariance",
     help="Invariance: auto-calibrated physics (starting with thermal diffusion).",
@@ -80,8 +87,8 @@ def simulate(
     try:
         sim_config = load_simulation_config(config)
     except ValidationError as e:
-        typer.echo("Error: Validation failed for simulation config", err=True)
-        typer.echo(e, err=True)
+        error("Validation failed for simulation config")
+        error(str(e))
         raise typer.Exit(code=1) from e
 
     # 2. Enforce stability (NEW — must be before writing anything)
@@ -92,7 +99,7 @@ def simulate(
     )
 
     if sim_config.time.dt > dt_max:
-        typer.echo(
+        error(
             (
                 "Error: Time step is unstable for explicit heat solver\n"
                 f"  dt      = {sim_config.time.dt:.3e}\n"
@@ -106,11 +113,20 @@ def simulate(
     try:
         create_run_directory(out, sim_config)
     except FileExistsError as e:
-        typer.echo(f"Error: Output directory already exists: {out}", err=True)
+        error(f"Output directory already exists: {out}")
         raise typer.Exit(code=1) from e
 
-    typer.echo(f"✔ Loaded simulation config from {config}")
-    typer.echo(f"✔ Created run directory: {out}")
+    info(f"Loaded simulation config from {config}")
+    info(f"Created run directory: {out}")
+    
+    write_manifest(
+    out,
+    command="simulate",
+    args={
+        "config": str(config),
+        "out": str(out),
+    },
+)
 
     # 4. Run heat simulation
     T = simulate_heat_2d(
@@ -141,7 +157,7 @@ def simulate(
         json.dump(metrics, f, indent=2)
 
     # 6. Done
-    typer.echo("✔ Heat simulation completed")
+    info("Heat simulation completed")
     
     
 @app.command()
@@ -204,8 +220,8 @@ def validate(
         json.dump(run_metrics, f, indent=2)
         f.truncate()
 
-    typer.echo("✔ Sensor validation completed")
-    typer.echo(f"RMSE = {metrics['rmse']:.3f}")
+    info("Sensor validation completed")
+    info(f"RMSE = {metrics['rmse']:.3f}")
     
     
 @app.command()
@@ -307,9 +323,9 @@ def calibrate(
         json.dump(metrics, f, indent=2)
         f.truncate()
 
-    typer.echo("✔ Calibration completed")
-    typer.echo(f"alpha: {result['alpha_initial']:.4f} → {result['alpha_fitted']:.4f}")
-    typer.echo(f"RMSE:  {rmse_before:.4f} → {rmse_after:.4f}")
+    info("Calibration completed")
+    info(f"alpha: {result['alpha_initial']:.4f} → {result['alpha_fitted']:.4f}")
+    info(f"RMSE:  {rmse_before:.4f} → {rmse_after:.4f}")
     
     
 @app.command()
@@ -341,7 +357,7 @@ def synth(
     try:
         sim_config = load_simulation_config(config)
     except ValidationError as e:
-        typer.echo("Error: invalid simulation config", err=True)
+        error("Invalid simulation config")
         raise typer.Exit(code=1) from e
 
     try:
@@ -353,14 +369,29 @@ def synth(
             out_dir=out,
         )
     except FileExistsError:
-        typer.echo(f"Error: output directory exists: {out}", err=True)
+        error(f"Output directory exists: {out}")
         raise typer.Exit(code=1)
 
-    typer.echo("✔ Synthetic case generated")
-    typer.echo(f"alpha_true = {alpha}")
-    typer.echo(f"sensors    = {n_sensors}")
-    typer.echo(f"noise_std  = {noise}")
+    info("Synthetic case generated")
+    info(f"alpha_true = {alpha}")
+    info(f"sensors    = {n_sensors}")
+    info(f"noise_std  = {noise}")
+    
+@app.command()
+def doctor() -> None:
+    """
+    Check Invariance installation and runtime environment.
+    """
+    import sys
+    import numpy
+    import scipy
+
+    info("Invariance installation OK")
+    info(f"Python {sys.version.split()[0]}")
+    info(f"NumPy {numpy.__version__}")
+    info(f"SciPy {scipy.__version__}")
 
 
 def main() -> None:
+    set_deterministic()
     app()

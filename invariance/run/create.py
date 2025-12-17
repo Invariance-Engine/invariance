@@ -30,3 +30,16 @@ def create_run_directory(
     # Placeholder metrics
     with (out_dir / "metrics.json").open("w") as f:
         json.dump({}, f, indent=2)
+        
+def write_manifest(out_dir, command: str, args: dict):
+    import json
+    from datetime import datetime, timezone
+
+    manifest = {
+        "command": command,
+        "args": args,
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+    with (out_dir / "manifest.json").open("w") as f:
+        json.dump(manifest, f, indent=2)
